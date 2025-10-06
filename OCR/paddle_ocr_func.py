@@ -1,15 +1,23 @@
+import logging
+
+import numpy as np
 from paddleocr import PaddleOCR
-import numpy as np 
+
+
+logger = logging.getLogger(__name__)
 
 class CustomPaddle(PaddleOCR):
     def __init__(self, doc_orientation_classify_model_name=None, doc_orientation_classify_model_dir=None, doc_unwarping_model_name=None, doc_unwarping_model_dir=None, text_detection_model_name=None, text_detection_model_dir=None, textline_orientation_model_name=None, textline_orientation_model_dir=None, textline_orientation_batch_size=None, text_recognition_model_name=None, text_recognition_model_dir=None, text_recognition_batch_size=None, use_doc_orientation_classify=None, use_doc_unwarping=None, use_textline_orientation=None, text_det_limit_side_len=None, text_det_limit_type=None, text_det_thresh=None, text_det_box_thresh=None, text_det_unclip_ratio=None, text_det_input_shape=None, text_rec_score_thresh=None, return_word_box=None, text_rec_input_shape=None, lang=None, ocr_version=None, **kwargs):
         super().__init__(doc_orientation_classify_model_name, doc_orientation_classify_model_dir, doc_unwarping_model_name, doc_unwarping_model_dir, text_detection_model_name, text_detection_model_dir, textline_orientation_model_name, textline_orientation_model_dir, textline_orientation_batch_size, text_recognition_model_name, text_recognition_model_dir, text_recognition_batch_size, use_doc_orientation_classify, use_doc_unwarping, use_textline_orientation, text_det_limit_side_len, text_det_limit_type, text_det_thresh, text_det_box_thresh, text_det_unclip_ratio, text_det_input_shape, text_rec_score_thresh, return_word_box, text_rec_input_shape, lang, ocr_version, **kwargs)
     
     def predict_with_align(self, image:np.ndarray):
+        logger.debug("Starting OCR prediction")
         result = self.predict(image, use_doc_orientation_classify=True)
         bboxes = result[0]["rec_boxes"]
         texts = result[0]["rec_texts"]
-        return self.group_text_lines(bboxes, texts)
+        grouped = self.group_text_lines(bboxes, texts)
+        logger.debug("OCR prediction produced %d grouped lines", len(grouped))
+        return grouped
     
     @staticmethod
     def group_text_lines(bboxes, texts, y_tolerance=25):

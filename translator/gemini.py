@@ -1,7 +1,13 @@
-import google.generativeai as genai
-from translator.prompts import get_prompt
-import time
 import ast
+import logging
+import time
+
+import google.generativeai as genai
+
+from translator.prompts import get_prompt
+
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiTranslator:
@@ -18,9 +24,9 @@ class GeminiTranslator:
         try:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel('gemini-2.5-flash')
-            print("✅ Gemini 모델이 성공적으로 초기화되었습니다.")
+            logger.info("Gemini model successfully initialized")
         except Exception as e:
-            print(f"🚨 모델 초기화 중 오류 발생: {e}")
+            logger.exception("Model initialization failed: %s", e)
             self.model = None
 
     
@@ -41,26 +47,35 @@ class GeminiTranslator:
             번역 결과 리스트 또는 실패 시 빈 문자열
         """
         if not self.model:
-            print("🚫 모델이 초기화되지 않았습니다. API 키를 확인하세요.")
+            logger.error("Gemini model is not initialized. Check API key.")
             return ""
 
         prompt = get_prompt(texts, source_lang=source_lang, target_lang=target_lang)
 
         for attempt in range(1, max_retries + 1):
             try:
+                logger.info(
+                    "Starting translation attempt %d/%d for %d text items",
+                    attempt,
+                    max_retries,
+                    len(texts) if hasattr(texts, "__len__") else 0,
+                )
                 response = self.model.generate_content(prompt)
                 if not response or not getattr(response, "text", None):
                     raise ValueError("Empty response or missing text field.")
 
                 parsed = parse_llm_output(response.text.strip())
+                logger.info("Translation succeeded on attempt %d", attempt)
                 return parsed
 
             except Exception as e:
-                print(f"⚠️ 번역 시도 {attempt}/{max_retries} 실패: {e}")
+                logger.warning(
+                    "Translation attempt %d/%d failed: %s", attempt, max_retries, e, exc_info=True
+                )
                 if attempt < max_retries:
                     time.sleep(retry_delay)
                 else:
-                    print("❌ 최대 재시도 횟수 초과. 빈 문자열 반환.")
+                    logger.error("Maximum retry attempts exceeded. Returning empty string.")
                     return ""
 
 
@@ -73,6 +88,7 @@ def parse_llm_output(output_str):
     try:
         data = ast.literal_eval(output_str)
     except Exception as e:
+        logger.exception("Failed to parse LLM output: %s", e)
         raise ValueError(f"Failed to parse LLM output: {e}")
 
     # 안전성 검사
@@ -87,4 +103,5 @@ def parse_llm_output(output_str):
             continue
         bbox = tuple(map(int, bbox))
         parsed.append((text, bbox))
+    logger.debug("Parsed LLM output into %d items", len(parsed))
     return parsed
