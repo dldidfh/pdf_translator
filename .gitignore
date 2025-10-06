@@ -1,0 +1,11 @@
+poppler*
+pdfs
+outputs
+images
+temp
+*.pyc
+*.pdf
+*.png
+*.zip
+*.docx
+__pycache__
