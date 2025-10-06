@@ -10,48 +10,75 @@ class CustomPaddle(PaddleOCR):
         bboxes = result[0]["rec_boxes"]
         texts = result[0]["rec_texts"]
         return self.group_text_lines(bboxes, texts)
-
+    
     @staticmethod
-    def group_text_lines(ocr_result, y_tolerance=10):
+    def group_text_lines(bboxes, texts, y_tolerance=25):
         """
-        OCR 결과를 y좌표 기준으로 그룹화하여 문단 리스트를 반환합니다.
-        
-        :param ocr_result: PaddleOCR의 결과 리스트 (e.g., result[0])
-        :param y_tolerance: 같은 줄로 판단할 y좌표의 최대 허용 오차 (픽셀 단위)
-        :return: 그룹화된 문단 텍스트의 리스트
+        bboxes와 texts를 기반으로 y좌표를 기준으로 같은 줄의 텍스트를 묶고,
+        줄별로 x좌표 기준으로 정렬하며, 각 줄은 통합 bbox로 반환합니다.
+
+        :param bboxes: [(x1, y1, x2, y2), ...]
+        :param texts: [text1, text2, ...]
+        :param y_tolerance: 같은 줄로 간주할 y좌표 허용 오차 (픽셀 단위)
+        :return: [(줄 텍스트, [min_x, min_y, max_x, max_y])] 형태의 리스트
         """
-        if not ocr_result:
+        if len(bboxes) == 0 or len(bboxes) != len(texts):
             return []
 
-        # 텍스트 블록을 y좌표(세로), x좌표(가로) 순으로 정렬합니다.
-        # box[0][1]은 좌측 상단 y좌표, box[0][0]은 좌측 상단 x좌표입니다.
-        ocr_result.sort(key=lambda x: (x[0][0][1], x[0][0][0]))
+        # (y2, x1, text, bbox) 형태로 변환
+        items = []
+        for bbox, text in zip(bboxes, texts):
+            if bbox is None or len(bbox) < 4:
+                continue
+            x1, y1, x2, y2 = map(float, bbox[:4])
+            bottom_y = max(y1, y2)
+            items.append((bottom_y, x1, text.strip(), [x1, y1, x2, y2]))
 
-        paragraphs = []
-        current_line_texts = []
-        # 첫 번째 줄의 평균 y좌표를 기준으로 시작합니다.
-        last_avg_y = (ocr_result[0][0][0][1] + ocr_result[0][0][3][1]) / 2
+        # y2(하단 y좌표) 기준으로 정렬
+        items.sort(key=lambda x: (x[0], x[1]))
 
-        for res in ocr_result:
-            box, (text, _) = res
-            top_left_y, bottom_left_y = box[0][1], box[3][1]
-            current_avg_y = (top_left_y + bottom_left_y) / 2
+        grouped_lines = []
+        current_line = []
+        current_y = None
 
-            # 이전 줄과의 y좌표 차이가 허용 오차 이내이면 같은 줄(문단)로 간주합니다.
-            if abs(current_avg_y - last_avg_y) <= y_tolerance:
-                current_line_texts.append(text)
+        for bottom_y, x1, text, bbox in items:
+            if current_y is None:
+                current_y = bottom_y
+                current_line = [(x1, text, bbox)]
+                continue
+
+            # 현재 라인과 y_tolerance 이내면 같은 줄로 간주
+            if abs(bottom_y - current_y) <= y_tolerance:
+                current_line.append((x1, text, bbox))
             else:
-                # y좌표 차이가 크면, 새로운 문단이 시작된 것으로 판단합니다.
-                # 지금까지 묶인 텍스트들을 하나의 문단으로 합치고 리스트에 추가합니다.
-                if current_line_texts:
-                    paragraphs.append(" ".join(current_line_texts))
-                # 새로운 문단을 현재 텍스트로 시작합니다.
-                current_line_texts = [text]
-            
-            last_avg_y = current_avg_y
+                # 현재 줄 정리 및 bbox 병합
+                current_line.sort(key=lambda t: t[0])
+                line_text = " ".join(t[1] for t in current_line)
 
-        # 마지막으로 처리된 문단을 추가합니다.
-        if current_line_texts:
-            paragraphs.append(" ".join(current_line_texts))
+                # bbox 합치기
+                xs1 = [t[2][0] for t in current_line]
+                ys1 = [t[2][1] for t in current_line]
+                xs2 = [t[2][2] for t in current_line]
+                ys2 = [t[2][3] for t in current_line]
+                merged_bbox = [min(xs1), min(ys1), max(xs2), max(ys2)]
 
-        return paragraphs
+                grouped_lines.append((line_text, merged_bbox))
+
+                # 새 줄 시작
+                current_y = bottom_y
+                current_line = [(x1, text, bbox)]
+
+        # 마지막 줄 추가
+        if current_line:
+            current_line.sort(key=lambda t: t[0])
+            line_text = " ".join(t[1] for t in current_line)
+
+            xs1 = [t[2][0] for t in current_line]
+            ys1 = [t[2][1] for t in current_line]
+            xs2 = [t[2][2] for t in current_line]
+            ys2 = [t[2][3] for t in current_line]
+            merged_bbox = [min(xs1), min(ys1), max(xs2), max(ys2)]
+
+            grouped_lines.append((line_text, merged_bbox))
+
+        return grouped_lines
