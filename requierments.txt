@@ -1,1 +1,7 @@
 google-generativeai
+paddleocr
+pdf2image
+python-docx
+tqdm
+numpy
+pillow
