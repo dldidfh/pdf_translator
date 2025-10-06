@@ -99,6 +99,7 @@ def layout_with_spaces(doc: Document, ocr_items, font_scale=0.2):
     ocr_items: [{'text': str, 'xywh': [x, y, w, h]}]
     OCR bbox 정보를 기반으로 자동 줄 정렬 + 줄바꿈 + 높이에 따른 폰트 크기 조절.
     """
+    if ocr_items == "": return
     ppc = px_per_char()
     lines = group_lines_xywh(ocr_items)
 

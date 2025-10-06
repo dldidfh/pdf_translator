@@ -1,5 +1,6 @@
 import google.generativeai as genai
 from translator.prompts import get_prompt
+import time
 import ast
 
 
@@ -22,30 +23,45 @@ class GeminiTranslator:
             print(f"🚨 모델 초기화 중 오류 발생: {e}")
             self.model = None
 
-    def translate(self, texts, source_lang: str = "Korean", target_lang: str = "English") -> str:
+    
+    def translate(self, texts, source_lang: str = "Korean", target_lang: str = "English",
+                  max_retries: int = 3, retry_delay: float = 2.0):
         """
-        입력된 텍스트를 지정된 언어로 번역합니다.
+        입력된 텍스트를 지정된 언어로 번역합니다. 실패 시 자동 재시도합니다.
 
         Args:
-            text (str): 번역할 텍스트.
-            source_lang (str): 원본 텍스트의 언어.
-            target_lang (str): 번역할 대상 언어.
+            texts: 번역할 OCR 텍스트 리스트
+            source_lang (str): 원본 언어
+            target_lang (str): 대상 언어
+            max_retries (int): 재시도 횟수 (기본 3)
+            retry_delay (float): 재시도 간 대기 시간(초) (기본 2.0초)
 
         Returns:
-            str: 번역된 텍스트. 번역 실패 시 빈 문자열을 반환합니다.
+            list[tuple[str, tuple[int,int,int,int]]] | str: 
+            번역 결과 리스트 또는 실패 시 빈 문자열
         """
         if not self.model:
-            return "모델이 초기화되지 않았습니다. API 키를 확인하세요."
+            print("🚫 모델이 초기화되지 않았습니다. API 키를 확인하세요.")
+            return ""
 
-        # 번역 작업을 명확하게 지시하는 프롬프트 구성
         prompt = get_prompt(texts, source_lang=source_lang, target_lang=target_lang)
 
-        try:
-            response = self.model.generate_content(prompt)
-            # 번역된 텍스트에서 불필요한 공백 제거 후 반환
-            return parse_llm_output(response.text.strip()) if response.text else "번역 결과를 가져올 수 없습니다."
-        except Exception as e:
-            return f"번역 중 오류가 발생했습니다: {e}"
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = self.model.generate_content(prompt)
+                if not response or not getattr(response, "text", None):
+                    raise ValueError("Empty response or missing text field.")
+
+                parsed = parse_llm_output(response.text.strip())
+                return parsed
+
+            except Exception as e:
+                print(f"⚠️ 번역 시도 {attempt}/{max_retries} 실패: {e}")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+                else:
+                    print("❌ 최대 재시도 횟수 초과. 빈 문자열 반환.")
+                    return ""
 
 
 def parse_llm_output(output_str):
