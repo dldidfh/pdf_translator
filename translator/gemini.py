@@ -31,7 +31,7 @@ class GeminiTranslator:
 
     
     def translate(self, texts, source_lang: str = "Korean", target_lang: str = "English",
-                  max_retries: int = 3, retry_delay: float = 2.0):
+                  max_retries: int = 5, retry_delay: float = 2.0):
         """
         입력된 텍스트를 지정된 언어로 번역합니다. 실패 시 자동 재시도합니다.
 

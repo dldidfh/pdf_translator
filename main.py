@@ -5,13 +5,17 @@ from pathlib import Path
 import numpy as np
 from pdf2image import convert_from_path
 from tqdm import tqdm
-
+import datetime
 from OCR.paddle_ocr_func import CustomPaddle
 from translator.gemini import GeminiTranslator
 from word.word_manager import Document, layout_with_spaces
 
 
+date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+log_file = os.path.join("logs", f"ocr_{date_str}.log")
+
 logging.basicConfig(
+    filename=log_file,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
 )
@@ -88,6 +92,6 @@ def main(pdf_path, out_path, poppler_path, lang="korean"):
 
 if __name__ == "__main__":
     pdf_path = "pdfs/full.pdf"
-    out_path = "outputs/full1.docx"
+    out_path = "outputs/20251006_test.docx"
     poppler_path = "C:/Users/USER/Desktop/work/python/test/2025_10_06_GPT_translate/poppler-25.07.0/Library/bin"
     main(pdf_path, out_path=out_path, poppler_path=poppler_path)
